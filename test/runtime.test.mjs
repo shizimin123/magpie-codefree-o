@@ -4,7 +4,7 @@ import { mkdtemp, writeFile, readFile, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { createHmac } from "node:crypto"
-import { BASE, createRuntime, encryptToken, decryptToken, readCredential, signature, localKey, parseLocalKey, validateBase } from "../runtime.mjs"
+import { BASE, createRuntime, encryptToken, decryptToken, modelRow, readCredential, signature, localKey, parseLocalKey, validateBase } from "../runtime.mjs"
 import { CodeFreeOAuthPlugin } from "../opencode.mjs"
 
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } })
@@ -37,6 +37,25 @@ test("local references pin identity, reject untrusted upstreams", async (t) => {
   assert.throws(() => parseLocalKey({ type: "api", key: "sk-user-secret" }), /请先连接/)
   await assert.rejects(readCredential(ref.path, "456"), /账号已改变/)
   for (const url of ["http://www.srdcloud.cn", "https://evil.example", "https://www.srdcloud.cn@evil.example", BASE + "/nested", BASE + "?token=x"]) assert.throws(() => validateBase(url))
+})
+
+test("known reasoning models expose effort variants and default to max", () => {
+  const glm53 = modelRow({ modelName: "glm-5.3", displayName: "GLM-5.3" })
+  assert.deepEqual(Object.keys(glm53.variants), ["low", "high", "max"])
+  assert.deepEqual(glm53.variants, {
+    low: { settings: { reasoningEffort: "low" } },
+    high: { settings: { reasoningEffort: "high" } },
+    max: { settings: { reasoningEffort: "max" } },
+  })
+  assert.equal(glm53.defaultVariant, "max")
+
+  const glm52 = modelRow({ modelName: "GLM-5.2" })
+  assert.deepEqual(Object.keys(glm52.variants), ["high", "max"])
+  assert.equal(glm52.defaultVariant, "max")
+
+  const unknown = modelRow({ modelName: "live-model" })
+  assert.equal(unknown.variants, undefined)
+  assert.equal(unknown.defaultVariant, undefined)
 })
 
 test("concurrent model discovery refreshes once and persists rotated encrypted token", async (t) => {

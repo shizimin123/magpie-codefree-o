@@ -20,6 +20,11 @@ const CLIENTS = {
 }
 const sessions = new Map()
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+const REASONING_EFFORTS = Object.freeze({
+  "glm-5.3": ["low", "high", "max"],
+  "glm-5.2": ["high", "max"],
+  "glm-5.3-flash": ["low", "high", "max"],
+})
 
 export function authPath(env = process.env, home = homedir()) {
   return resolve(env.MAGPIE_CODEFREE_AUTH_FILE || env.OPENCODE_CODEFREE_AUTH_FILE || join(home, ".codefree-o", ".local", "share", "codefree.json"))
@@ -214,10 +219,13 @@ export function createRuntime({ fetchImpl = globalThis.fetch, version = process.
 export function modelRow(m) {
   const image = m.modelType === "multimodal"
   const input = Number(m.maxTokens) || 80000, output = Number(m.maxOutputTokens) || 8000
+  const efforts = REASONING_EFFORTS[String(m.modelName).toLowerCase()]
+  const variants = efforts ? Object.fromEntries(efforts.map((effort) => [effort, { settings: { reasoningEffort: effort } }])) : undefined
   return {
     id: m.modelName, name: m.displayName || m.modelName,
     limit: { context: Number(m.maxTotalTokens) || input + output, output },
     reasoning: true, tool_call: true, attachment: image,
+    ...(efforts ? { defaultVariant: "max", variants } : {}),
     interleaved: { field: "reasoning_content" },
     modalities: { input: image ? ["text", "image"] : ["text"], output: ["text"] },
     ...(m.accessMode === undefined ? {} : { options: { accessMode: m.accessMode } }),
